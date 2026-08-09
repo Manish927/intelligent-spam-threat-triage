@@ -29,6 +29,9 @@ data/raw/*
 data/processed/*
 !data/processed/.gitkeep
 
+# Allow sanitized demonstration samples
+!data/samples/
+
 # Generated artifacts
 artifacts/*
 !artifacts/.gitkeep
