@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Environment / secrets
+.env
+.env.*
+*.key
+credentials.json
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Raw and generated datasets
+data/raw/*
+!data/raw/.gitkeep
+
+data/processed/*
+!data/processed/.gitkeep
+
+# Generated artifacts
+artifacts/*
+!artifacts/.gitkeep
+
+# ML models
+*.pkl
+*.joblib
+*.onnx
+
+# Logs
+*.log
+logs/
