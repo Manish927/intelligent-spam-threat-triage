@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "intelligent-spam-threat-triage"
+version = "0.1.0"
+description = "Agentic AI powered intelligent spam classification and threat triage platform"
+readme = "README.md"
+requires-python = ">=3.11"
+
+dependencies = [
+    "pandas",
+    "numpy",
+    "datasets",
+    "pyarrow",
+    "scikit-learn",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
