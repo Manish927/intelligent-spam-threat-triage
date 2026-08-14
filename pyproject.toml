@@ -21,6 +21,9 @@ dependencies = [
 dev = [
     "pytest",
 ]
+adk = [
+    "google-adk"
+]
 
 [tool.setuptools]
 package-dir = {"" = "src"}
@@ -31,3 +34,4 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
+
