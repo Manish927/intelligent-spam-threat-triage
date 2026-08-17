@@ -66,6 +66,14 @@ class ADKAgentModelMetadata(BaseModel):
 
 
 class ADKAgentReviewResult(BaseModel):
+    """
+    Structured content produced by Gemini.
+
+    Runtime metadata is intentionally excluded because provider,
+    model name, agent version, and request/session identifiers are
+    application-controlled values.
+    """
+
     message_id: str
 
     findings: list[ADKAgentFinding]
@@ -73,8 +81,6 @@ class ADKAgentReviewResult(BaseModel):
     recommendation: ADKAgentRecommendation
 
     explanation: str
-
-    model_metadata: ADKAgentModelMetadata
 
 
 def create_message_review_agent(

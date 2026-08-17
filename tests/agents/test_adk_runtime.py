@@ -812,8 +812,19 @@ def test_structured_output_contract_contains_required_fields():
         "findings",
         "recommendation",
         "explanation",
-        "model_metadata",
     }
+
+
+def test_structured_output_contract_excludes_runtime_metadata():
+    schema = (
+        ADKAgentReviewResult
+        .model_json_schema()
+    )
+
+    assert (
+        "model_metadata"
+        not in schema["properties"]
+    )
 
 
 def test_finding_schema_contains_evidence_refs():

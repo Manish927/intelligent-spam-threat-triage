@@ -766,3 +766,307 @@ def test_provider_raw_id_does_not_leak_into_agent_contract():
         "raw_provider_id"
         not in result
     )
+
+
+# ============================================================
+# Configured provider selection
+# ============================================================
+
+
+def test_resolve_provider_returns_offline_without_vt_key(
+    monkeypatch,
+):
+    from threat_triage.agents.tools.threat_intel_tool import (
+        OfflineThreatIntelProvider,
+        resolve_threat_intel_provider,
+    )
+
+    monkeypatch.delenv(
+        "VIRUSTOTAL_API_KEY",
+        raising=False,
+    )
+
+    provider = (
+        resolve_threat_intel_provider()
+    )
+
+    assert isinstance(
+        provider,
+        OfflineThreatIntelProvider,
+    )
+
+    assert (
+        provider.name
+        == "offline"
+    )
+
+
+def test_resolve_provider_ignores_whitespace_vt_key(
+    monkeypatch,
+):
+    from threat_triage.agents.tools.threat_intel_tool import (
+        OfflineThreatIntelProvider,
+        resolve_threat_intel_provider,
+    )
+
+    monkeypatch.setenv(
+        "VIRUSTOTAL_API_KEY",
+        "   ",
+    )
+
+    provider = (
+        resolve_threat_intel_provider()
+    )
+
+    assert isinstance(
+        provider,
+        OfflineThreatIntelProvider,
+    )
+
+
+def test_resolve_provider_returns_virustotal_when_key_configured(
+    monkeypatch,
+):
+    from threat_triage.agents.tools.threat_intel_tool import (
+        resolve_threat_intel_provider,
+    )
+    from threat_triage.agents.tools.virustotal_provider import (
+        VirusTotalThreatIntelProvider,
+    )
+
+    monkeypatch.setenv(
+        "VIRUSTOTAL_API_KEY",
+        "test-vt-key",
+    )
+
+    provider = (
+        resolve_threat_intel_provider()
+    )
+
+    assert isinstance(
+        provider,
+        VirusTotalThreatIntelProvider,
+    )
+
+    assert (
+        provider.name
+        == "virustotal"
+    )
+
+
+def test_configured_lookup_uses_offline_provider_without_key(
+    monkeypatch,
+):
+    from threat_triage.agents.tools.threat_intel_tool import (
+        lookup_configured_threat_intelligence,
+    )
+
+    monkeypatch.delenv(
+        "VIRUSTOTAL_API_KEY",
+        raising=False,
+    )
+
+    result = (
+        lookup_configured_threat_intelligence(
+            indicator="example.com",
+            indicator_type="DOMAIN",
+        )
+    )
+
+    assert (
+        result.provider
+        == "offline"
+    )
+
+    assert (
+        result.reputation
+        == Reputation.UNKNOWN
+    )
+
+    assert (
+        result.found
+        is False
+    )
+
+
+def test_configured_dict_lookup_is_json_friendly_without_key(
+    monkeypatch,
+):
+    from threat_triage.agents.tools.threat_intel_tool import (
+        lookup_configured_threat_intelligence_dict,
+    )
+
+    monkeypatch.delenv(
+        "VIRUSTOTAL_API_KEY",
+        raising=False,
+    )
+
+    result = (
+        lookup_configured_threat_intelligence_dict(
+            indicator="example.com",
+            indicator_type="DOMAIN",
+        )
+    )
+
+    assert isinstance(
+        result,
+        dict,
+    )
+
+    assert (
+        result["provider"]
+        == "offline"
+    )
+
+    assert (
+        result["indicator_type"]
+        == "DOMAIN"
+    )
+
+    assert (
+        result["reputation"]
+        == "UNKNOWN"
+    )
+
+    assert isinstance(
+        result["checked_at"],
+        str,
+    )
+
+
+def test_configured_lookup_uses_resolved_provider(
+    monkeypatch,
+):
+    import threat_triage.agents.tools.threat_intel_tool as module
+
+    class FakeConfiguredProvider:
+        @property
+        def name(self):
+            return "configured-test-provider"
+
+        def lookup(
+            self,
+            *,
+            indicator,
+            indicator_type,
+        ):
+            return ProviderThreatIntelResult(
+                found=True,
+                reputation=Reputation.MALICIOUS,
+                confidence=0.95,
+                categories=[
+                    "phishing",
+                ],
+                references=[
+                    "test:indicator",
+                ],
+            )
+
+    monkeypatch.setattr(
+        module,
+        "resolve_threat_intel_provider",
+        lambda: FakeConfiguredProvider(),
+    )
+
+    result = (
+        module
+        .lookup_configured_threat_intelligence(
+            indicator="evil.example",
+            indicator_type="DOMAIN",
+        )
+    )
+
+    assert (
+        result.provider
+        == "configured-test-provider"
+    )
+
+    assert (
+        result.found
+        is True
+    )
+
+    assert (
+        result.reputation
+        == Reputation.MALICIOUS
+    )
+
+    assert (
+        result.confidence
+        == 0.95
+    )
+
+
+def test_configured_provider_not_exposed_as_function_argument():
+    import inspect
+
+    from threat_triage.agents.tools.threat_intel_tool import (
+        lookup_configured_threat_intelligence_dict,
+    )
+
+    signature = inspect.signature(
+        lookup_configured_threat_intelligence_dict
+    )
+
+    assert set(
+        signature.parameters.keys()
+    ) == {
+        "indicator",
+        "indicator_type",
+    }
+
+    assert (
+        "provider"
+        not in signature.parameters
+    )
+
+
+def test_vt_key_not_present_in_configured_result(
+    monkeypatch,
+):
+    import threat_triage.agents.tools.threat_intel_tool as module
+
+    class FakeProvider:
+        @property
+        def name(self):
+            return "virustotal"
+
+        def lookup(
+            self,
+            *,
+            indicator,
+            indicator_type,
+        ):
+            return ProviderThreatIntelResult(
+                found=False,
+                reputation=Reputation.UNKNOWN,
+                confidence=0.0,
+            )
+
+    monkeypatch.setenv(
+        "VIRUSTOTAL_API_KEY",
+        "super-secret-vt-key",
+    )
+
+    monkeypatch.setattr(
+        module,
+        "resolve_threat_intel_provider",
+        lambda: FakeProvider(),
+    )
+
+    result = (
+        module
+        .lookup_configured_threat_intelligence_dict(
+            indicator="example.com",
+            indicator_type="DOMAIN",
+        )
+    )
+
+    serialized = json.dumps(
+        result
+    )
+
+    assert (
+        "super-secret-vt-key"
+        not in serialized
+    )

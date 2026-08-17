@@ -6,6 +6,10 @@ import uuid
 from collections.abc import AsyncIterable
 from dataclasses import asdict
 from typing import Any, Optional
+from threat_triage.agents.message_review_agent import (
+    AGENT_VERSION,
+)
+
 
 from threat_triage.agents.adk_errors import (
     ADKExecutionError,
@@ -372,7 +376,9 @@ async def run_agent_review(
 
     try:
         return _convert_adk_result(
-            adk_result
+            adk_result,
+            model=normalized_model,
+            request_id=resolved_session_id,
         )
 
     except ADKExecutionError:
@@ -391,10 +397,16 @@ async def run_agent_review(
 
 def _convert_adk_result(
     result: ADKAgentReviewResult,
+    *,
+    model: str,
+    request_id: str | None = None,
 ) -> AgentReviewResult:
     """
-    Convert validated ADK/Pydantic output into the immutable
-    platform-level AgentReviewResult.
+    Convert Gemini's validated structured content into the platform
+    AgentReviewResult.
+
+    Runtime metadata is injected by the application and is never
+    trusted from model output.
     """
 
     findings = [
@@ -411,12 +423,8 @@ def _convert_adk_result(
     ]
 
     recommendation = AgentRecommendation(
-        disposition=(
-            result.recommendation.disposition
-        ),
-        confidence=(
-            result.recommendation.confidence
-        ),
+        disposition=result.recommendation.disposition,
+        confidence=result.recommendation.confidence,
         reasons=list(
             result.recommendation.reasons
         ),
@@ -428,18 +436,10 @@ def _convert_adk_result(
     )
 
     metadata = AgentModelMetadata(
-        provider=(
-            result.model_metadata.provider
-        ),
-        model_name=(
-            result.model_metadata.model_name
-        ),
-        agent_version=(
-            result.model_metadata.agent_version
-        ),
-        request_id=(
-            result.model_metadata.request_id
-        ),
+        provider="google",
+        model_name=model,
+        agent_version=AGENT_VERSION,
+        request_id=request_id,
     )
 
     return AgentReviewResult(

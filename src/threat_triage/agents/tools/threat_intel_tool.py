@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
@@ -26,8 +28,8 @@ class ProviderThreatIntelResult:
     """
     Normalized response returned by a threat-intelligence provider.
 
-    Provider implementations should map their native response
-    into this contract before returning it to the tool layer.
+    Provider implementations map their native provider response into
+    this contract before returning evidence to the agent tool layer.
     """
 
     found: bool
@@ -57,11 +59,12 @@ class ThreatIntelProvider(Protocol):
     """
     Provider abstraction for external threat-intelligence services.
 
-    Future implementations may include:
-        - VirusTotal
-        - enterprise threat-intelligence platforms
-        - internal reputation services
-        - offline/local intelligence stores
+    Implementations may include:
+
+        - OfflineThreatIntelProvider
+        - VirusTotalThreatIntelProvider
+        - enterprise reputation systems
+        - internal threat-intelligence services
     """
 
     @property
@@ -80,15 +83,16 @@ class ThreatIntelProvider(Protocol):
 @dataclass(frozen=True)
 class ThreatIntelToolResult:
     """
-    Agent-facing normalized threat-intelligence result.
+    Agent-facing normalized threat-intelligence evidence.
 
-    The tool returns provider evidence only.
+    The result is evidence only.
 
     It does not:
-        - make the final triage decision,
-        - modify the ML prediction,
-        - modify the deterministic security evidence,
-        - assign the platform risk score.
+        - modify ML predictions,
+        - modify deterministic evidence,
+        - modify risk scores,
+        - modify routing,
+        - make the platform enforcement decision.
     """
 
     indicator: str
@@ -147,17 +151,17 @@ class ThreatIntelToolResult:
 
 class OfflineThreatIntelProvider:
     """
-    Offline-safe default provider.
+    Offline-safe threat-intelligence provider.
 
-    This implementation performs no network calls.
+    This provider performs no network requests.
 
-    It is useful for:
-        - local development,
+    It is used when a real provider has not been configured and is
+    appropriate for:
+
         - unit tests,
         - CI,
-        - environments without credentials,
-        - validating Agentic AI orchestration before integrating
-          an external provider such as VirusTotal.
+        - offline development,
+        - environments without threat-intelligence credentials.
     """
 
     @property
@@ -182,6 +186,50 @@ class OfflineThreatIntelProvider:
 DEFAULT_PROVIDER = OfflineThreatIntelProvider()
 
 
+def resolve_threat_intel_provider() -> ThreatIntelProvider:
+    """
+    Resolve the threat-intelligence provider from application
+    configuration.
+
+    Current policy:
+
+        VIRUSTOTAL_API_KEY configured
+                ↓
+        VirusTotalThreatIntelProvider
+
+        VIRUSTOTAL_API_KEY missing
+                ↓
+        OfflineThreatIntelProvider
+
+    The VirusTotal import is intentionally lazy.
+
+    This avoids a circular import because virustotal_provider.py uses
+    the common threat-intelligence contracts defined in this module.
+
+    The provider is resolved at execution time rather than import time,
+    which also allows .env configuration to be loaded before the agent
+    performs a lookup.
+    """
+
+    api_key = os.getenv(
+        "VIRUSTOTAL_API_KEY"
+    )
+
+    if (
+        api_key
+        and api_key.strip()
+    ):
+        from threat_triage.agents.tools.virustotal_provider import (
+            VirusTotalThreatIntelProvider,
+        )
+
+        return VirusTotalThreatIntelProvider(
+            api_key=api_key.strip()
+        )
+
+    return DEFAULT_PROVIDER
+
+
 def lookup_threat_intelligence(
     *,
     indicator: str,
@@ -189,48 +237,42 @@ def lookup_threat_intelligence(
     provider: ThreatIntelProvider = DEFAULT_PROVIDER,
 ) -> ThreatIntelToolResult:
     """
-    Look up one threat indicator through a provider abstraction.
+    Look up one threat indicator through an explicitly supplied provider.
 
-    Parameters
-    ----------
-    indicator:
-        Domain, URL, IP, email address, or hash to inspect.
+    This function remains provider-aware because it is useful for:
 
-    indicator_type:
-        Type of indicator being supplied.
+        - unit tests,
+        - provider-specific integrations,
+        - deterministic application orchestration.
 
-    provider:
-        Threat-intelligence provider implementation.
-
-        The default provider is offline and performs no network call.
-
-    Returns
-    -------
-    ThreatIntelToolResult
-        Structured normalized threat-intelligence evidence.
-
-    Failure Behavior
-    ----------------
-    Provider failures are converted into structured tool results
-    rather than being allowed to crash the future agent workflow.
+    It should NOT be exposed directly to Gemini because the provider
+    argument is application-controlled.
     """
 
-    normalized_indicator = _normalize_indicator(
-        indicator
+    normalized_indicator = (
+        _normalize_indicator(
+            indicator
+        )
     )
 
-    normalized_type = _normalize_indicator_type(
-        indicator_type
+    normalized_type = (
+        _normalize_indicator_type(
+            indicator_type
+        )
     )
 
-    provider_name = _provider_name(
-        provider
+    provider_name = (
+        _provider_name(
+            provider
+        )
     )
 
     try:
-        provider_result = provider.lookup(
-            indicator=normalized_indicator,
-            indicator_type=normalized_type,
+        provider_result = (
+            provider.lookup(
+                indicator=normalized_indicator,
+                indicator_type=normalized_type,
+            )
         )
 
     except Exception as exc:
@@ -246,7 +288,8 @@ def lookup_threat_intelligence(
             references=[],
             stale=False,
             error=(
-                "Threat intelligence provider lookup failed: "
+                "Threat intelligence provider "
+                "lookup failed: "
                 f"{type(exc).__name__}"
             ),
         )
@@ -277,7 +320,10 @@ def lookup_threat_intelligence_dict(
     provider: ThreatIntelProvider = DEFAULT_PROVIDER,
 ) -> dict:
     """
-    JSON-friendly wrapper for future ADK/Gemini function calling.
+    JSON-friendly wrapper around lookup_threat_intelligence().
+
+    This provider-aware function is primarily intended for deterministic
+    application code and tests.
     """
 
     result = lookup_threat_intelligence(
@@ -286,11 +332,74 @@ def lookup_threat_intelligence_dict(
         provider=provider,
     )
 
+    return _tool_result_to_dict(
+        result
+    )
+
+
+def lookup_configured_threat_intelligence(
+    *,
+    indicator: str,
+    indicator_type: IndicatorType | str,
+) -> ThreatIntelToolResult:
+    """
+    Perform a threat-intelligence lookup using the provider selected
+    from application configuration.
+
+    The provider itself is never exposed to the LLM.
+    """
+
+    provider = (
+        resolve_threat_intel_provider()
+    )
+
+    return lookup_threat_intelligence(
+        indicator=indicator,
+        indicator_type=indicator_type,
+        provider=provider,
+    )
+
+
+def lookup_configured_threat_intelligence_dict(
+    *,
+    indicator: str,
+    indicator_type: IndicatorType | str,
+) -> dict:
+    """
+    JSON-friendly configured-provider wrapper.
+
+    This is the preferred function for the ADK-facing adapter because
+    its public arguments contain only JSON-schema-friendly values:
+
+        indicator
+        indicator_type
+
+    Provider selection remains application-controlled.
+    """
+
+    result = (
+        lookup_configured_threat_intelligence(
+            indicator=indicator,
+            indicator_type=indicator_type,
+        )
+    )
+
+    return _tool_result_to_dict(
+        result
+    )
+
+
+def _tool_result_to_dict(
+    result: ThreatIntelToolResult,
+) -> dict:
+    """
+    Convert ThreatIntelToolResult into JSON-compatible primitives.
+    """
+
     data = asdict(
         result
     )
 
-    # Convert enum / datetime values into JSON-friendly primitives.
     data["indicator_type"] = (
         result.indicator_type.value
     )
@@ -339,7 +448,7 @@ def _normalize_indicator_type(
     indicator_type: IndicatorType | str,
 ) -> IndicatorType:
     """
-    Normalize indicator-type input into the enum contract.
+    Normalize indicator type into the platform enum.
     """
 
     if isinstance(
@@ -350,7 +459,9 @@ def _normalize_indicator_type(
 
     try:
         return IndicatorType(
-            str(indicator_type)
+            str(
+                indicator_type
+            )
             .strip()
             .upper()
         )

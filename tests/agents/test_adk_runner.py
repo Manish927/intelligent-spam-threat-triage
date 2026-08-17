@@ -28,6 +28,10 @@ from threat_triage.agents.adk_runtime import (
     ADKAgentRecommendation,
     ADKAgentReviewResult,
 )
+from threat_triage.agents.message_review_agent import (
+    AGENT_VERSION,
+)
+
 from threat_triage.agents.models import (
     AgentDisposition,
     AgentFindingCategory,
@@ -42,6 +46,10 @@ from threat_triage.risk.models import (
     RoutingDecision,
     RoutingResult,
 )
+
+
+TEST_MODEL = "gemini-3.6-flash"
+TEST_REQUEST_ID = "test-session-001"
 
 
 def build_review_input(
@@ -459,7 +467,9 @@ def test_convert_adk_result_preserves_message_id():
     result = _convert_adk_result(
         build_adk_result(
             message_id="msg-convert"
-        )
+        ),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -470,7 +480,9 @@ def test_convert_adk_result_preserves_message_id():
 
 def test_convert_adk_result_converts_findings():
     result = _convert_adk_result(
-        build_adk_result()
+        build_adk_result(),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -491,7 +503,9 @@ def test_convert_adk_result_converts_findings():
 
 def test_convert_adk_result_preserves_evidence_refs():
     result = _convert_adk_result(
-        build_adk_result()
+        build_adk_result(),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -502,7 +516,9 @@ def test_convert_adk_result_preserves_evidence_refs():
 
 def test_convert_adk_result_converts_recommendation():
     result = _convert_adk_result(
-        build_adk_result()
+        build_adk_result(),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -520,7 +536,9 @@ def test_convert_adk_result_converts_recommendation():
 
 def test_convert_adk_result_converts_metadata():
     result = _convert_adk_result(
-        build_adk_result()
+        build_adk_result(),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -530,13 +548,25 @@ def test_convert_adk_result_converts_metadata():
 
     assert (
         result.model_metadata.model_name
-        == "gemini-test-model"
+        == TEST_MODEL
+    )
+
+    assert (
+        result.model_metadata.agent_version
+        == AGENT_VERSION
+    )
+
+    assert (
+        result.model_metadata.request_id
+        == TEST_REQUEST_ID
     )
 
 
 def test_convert_adk_result_preserves_explanation():
     result = _convert_adk_result(
-        build_adk_result()
+        build_adk_result(),
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -552,7 +582,9 @@ def test_conversion_copies_evidence_refs():
     source = build_adk_result()
 
     converted = _convert_adk_result(
-        source
+        source,
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (
@@ -566,7 +598,9 @@ def test_conversion_copies_reasons():
     source = build_adk_result()
 
     converted = _convert_adk_result(
-        source
+        source,
+        model=TEST_MODEL,
+        request_id=TEST_REQUEST_ID,
     )
 
     assert (

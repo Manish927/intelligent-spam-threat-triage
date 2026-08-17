@@ -12,7 +12,9 @@ from threat_triage.agents.tools import (
     inspect_language_evidence_dict,
     inspect_sender_evidence_dict,
     inspect_url_evidence_dict,
-    lookup_threat_intelligence_dict,
+)
+from threat_triage.agents.tools.threat_intel_tool import (
+    lookup_configured_threat_intelligence_dict,
 )
 
 
@@ -241,9 +243,6 @@ class AgentToolDefinition:
     """
     Runtime-neutral description of one tool exposed to the
     message-review agent.
-
-    Keeping tool registration separate from the Google ADK runtime
-    allows the agent contract to be tested without invoking Gemini.
     """
 
     name: str
@@ -276,7 +275,7 @@ def lookup_threat_intelligence_for_agent(
     indicator_type: str,
 ) -> dict:
     """
-    Look up threat-intelligence evidence for an indicator.
+    Look up configured threat-intelligence evidence for an indicator.
 
     Args:
         indicator:
@@ -286,37 +285,37 @@ def lookup_threat_intelligence_for_agent(
         indicator_type:
             Indicator type.
 
-            Supported values:
+            Supported platform values:
             DOMAIN, URL, IP, EMAIL, HASH.
 
     Returns:
         Structured threat-intelligence evidence.
 
-    Notes:
-        The threat-intelligence provider is controlled by the
-        application.
+    Security:
+        Provider selection and credentials are controlled entirely by
+        the application.
 
-        The provider parameter is intentionally NOT exposed to the LLM.
+        Gemini cannot:
+            - select the provider,
+            - provide credentials,
+            - read provider credentials.
+
+        When VIRUSTOTAL_API_KEY is configured, VirusTotal is used.
+
+        Otherwise the offline provider returns UNKNOWN evidence.
     """
 
-    return lookup_threat_intelligence_dict(
-        indicator=indicator,
-        indicator_type=indicator_type,
+    return (
+        lookup_configured_threat_intelligence_dict(
+            indicator=indicator,
+            indicator_type=indicator_type,
+        )
     )
 
 
 def get_message_review_tools() -> List[AgentToolDefinition]:
     """
     Return all evidence-inspection tools available to the review agent.
-
-    Tools expose evidence only.
-
-    They do not:
-        - quarantine email,
-        - delete email,
-        - block senders,
-        - change risk scores,
-        - change routing decisions.
     """
 
     return [
@@ -354,8 +353,8 @@ def get_message_review_tools() -> List[AgentToolDefinition]:
             description=(
                 "Look up threat-intelligence evidence for a domain, "
                 "URL, IP address, email address, or hash. "
-                "The provider is controlled by the application and "
-                "cannot be selected by the model."
+                "The provider and credentials are controlled by the "
+                "application and cannot be selected by the model."
             ),
         ),
     ]
@@ -363,7 +362,7 @@ def get_message_review_tools() -> List[AgentToolDefinition]:
 
 def get_message_review_tool_functions() -> List[Callable[..., dict]]:
     """
-    Return Python callables intended for Google ADK tool registration.
+    Return Python callables intended for Google ADK registration.
     """
 
     return [
