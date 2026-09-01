@@ -35,6 +35,8 @@ data/processed/*
 # Generated artifacts
 artifacts/*
 !artifacts/.gitkeep
+!artifacts/evaluation/figures
+!artifacts\evaluation
 
 # ML models
 *.pkl
