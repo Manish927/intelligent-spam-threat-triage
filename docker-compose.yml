@@ -1,0 +1,24 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      THREAT_TRIAGE_GEMINI_MODEL: ${THREAT_TRIAGE_GEMINI_MODEL:-gemini-3.5-flash-lite}
+      THREAT_TRIAGE_ENABLE_AGENT_REVIEW: ${THREAT_TRIAGE_ENABLE_AGENT_REVIEW:-true}
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      VIRUSTOTAL_API_KEY: ${VIRUSTOTAL_API_KEY:-}
+    ports:
+      - "8000:8000"
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile.dashboard
+    environment:
+      THREAT_TRIAGE_API_BASE_URL: http://api:8000
+    ports:
+      - "8501:8501"
+    depends_on:
+      - api
