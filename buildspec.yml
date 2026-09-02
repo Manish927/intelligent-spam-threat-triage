@@ -1,0 +1,17 @@
+version: 0.2
+
+phases:
+  pre_build:
+    commands:
+      - echo "Starting AWS CodeBuild"
+      - docker --version
+
+  build:
+    commands:
+      - echo "Building Threat Triage Docker image"
+      - docker build -t intelligent-spam-threat-triage .
+
+  post_build:
+    commands:
+      - echo "Docker build completed successfully"
+      - docker images
